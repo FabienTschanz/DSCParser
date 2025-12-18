@@ -154,34 +154,14 @@ function ConvertFrom-CIMInstanceToHashtable
 
                 if ($null -eq $CIMClassObject -or [version]$CIMClassObject.CimClassQualifiers["ClassVersion"].Value -lt $classVersion)
                 {
-                    $InvokeParams = @{
-                        Name        = $ResourceName
-                        Method      = 'Get'
-                        Property    = @{
-                            'dummyValue' = 'dummyValue'
-                        }
-                        ModuleName  = @{
-                            ModuleName    = $dscResourceInfo.ModuleName
-                            ModuleVersion = $dscResourceInfo.Version
-                        }
-                        ErrorAction = 'Stop'
-                    }
-
                     do
                     {
                         $firstTry = $true
                         try
                         {
-                            try
-                            {
-                                Invoke-DscResource @InvokeParams | Out-Null
-                            }
-                            catch
-                            {
-                                if ($_.Exception.Message -ne "A parameter cannot be found that matches parameter name 'dummyValue'.")
-                                {
-                                    throw
-                                }
+                            $returnString = & "$($env:SystemRoot)\System32\Wbem\mofcomp.exe" -N:Root\Microsoft\Windows\DesiredStateConfiguration (Join-Path -Path $dscResourceInfo.ParentPath -ChildPath "MSFT_$ResourceName.schema.mof")
+                            if ($returnString -match "An error occurred" -or $LASTEXITCODE -ne 0) {
+                                throw "Failed to compile MOF schema for resource $ResourceName. mofcomp output: $returnString"
                             }
                             $firstTry = $false
 
@@ -212,11 +192,7 @@ function ConvertFrom-CIMInstanceToHashtable
                         }
                         catch
                         {
-                            if ($firstTry)
-                            {
-                                $InvokeParams.ErrorAction = 'SilentlyContinue'
-                            }
-                            if ($_.CategoryInfo.Category -eq 'PermissionDenied')
+                            if ($_.CategoryInfo.Category -eq 'PermissionDenied' -or $_.Exception.Message -match 'Access denied')
                             {
                                 throw "The CIM class $CimInstanceName is not available or could not be instantiated. Please run this command with administrative privileges."
                             }
@@ -224,11 +200,6 @@ function ConvertFrom-CIMInstanceToHashtable
                             if ($_.Exception.Message -match '(Resource \w+ was not found|The PowerShell DSC resource .+ does not exist at the PowerShell module path nor is it registered as a WMI DSC resource)')
                             {
                                 throw $_
-                            }
-                            # If the connection to the WinRM service fails, inform the user to configure and enable it
-                            elseif ($_.Exception.Message -match 'The client cannot connect to the destination.*')
-                            {
-                                throw "Connection to the Windows Remote Management (WinRM) service failed. Please run ""winrm quickconfig"" or ""Enable-PSRemoting -Force -SkipNetworkProfileCheck"" to configure and enable it."
                             }
                         }
                     } while ($firstTry)
