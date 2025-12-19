@@ -2,10 +2,6 @@
 
 if ($Script:IsPowerShellCore)
 {
-    if ($IsWindows)
-    {
-        Import-Module -Name 'PSDesiredStateConfiguration' -RequiredVersion 1.1 -UseWindowsPowerShell -WarningAction SilentlyContinue
-    }
     Import-Module -Name 'PSDesiredStateConfiguration' -MinimumVersion 2.0.7 -Prefix 'Pwsh'
 }
 
@@ -576,6 +572,9 @@ function ConvertTo-DSCObject
     # Get the name of the configuration.
     $configurationName = $Config.InstanceName.Value
 
+    # Create a cache for resource property lookups to improve performance
+    $Script:ResourcePropertyCache = @{}
+
     $totalCount = 1
     foreach ($resource in $resourceInstances)
     {
@@ -597,6 +596,18 @@ function ConvertTo-DSCObject
 
         # Get a reference to the current resource.
         $currentResource = $Script:DSCResources[$resourceType]
+
+        # Create property lookup hashtable for this resource type if not already cached
+        if (-not $Script:ResourcePropertyCache.ContainsKey($resourceType))
+        {
+            $propertyLookup = @{}
+            foreach ($prop in $currentResource.Properties)
+            {
+                $propertyLookup[$prop.Name] = $prop
+            }
+            $Script:ResourcePropertyCache[$resourceType] = $propertyLookup
+        }
+        $resourcePropertyLookup = $Script:ResourcePropertyCache[$resourceType]
 
         # Loop through all the key/pair value
         foreach ($keyValuePair in $resource.CommandElements[2].KeyValuePairs)
@@ -659,7 +670,7 @@ function ConvertTo-DSCObject
             }
 
             # Retrieve the current property's type based on the resource's schema.
-            $currentPropertyInResourceSchema = $currentResource.Properties.Where({ $_.Name -eq $key })
+            $currentPropertyInResourceSchema = $resourcePropertyLookup[$key]
             $valueType = $currentPropertyInResourceSchema.PropertyType
 
             # If the value type is null, then the parameter doesn't exist
@@ -739,7 +750,7 @@ function ConvertTo-DSCObject
                         $value = @($value)
                     }
                 }
-                $currentResourceInfo.Add($key, $value) | Out-Null
+                $null = $currentResourceInfo.Add($key, $value)
             }
         }
 
