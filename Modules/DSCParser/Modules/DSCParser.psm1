@@ -132,7 +132,7 @@ function ConvertTo-DSCObject
         if ($Script:IsPowerShellCore)
         {
             # PowerShell 7+ uses PSDesiredStateConfiguration module
-            if ($null -eq $Script:DscResourceCache -and !$PSBoundParameters.ContainsKey('DscResourceInfo'))
+            if ($null -eq $Script:DscResourceCache -and -not $PSBoundParameters.ContainsKey('DscResourceInfo'))
             {
                 $Script:DscResourceCache = Get-PwshDscResource
             }
@@ -143,9 +143,13 @@ function ConvertTo-DSCObject
         }
         else
         {
-            if ($null -eq $Script:DscResourceCache)
+            if ($null -eq $Script:DscResourceCache -and -not $PSBoundParameters.ContainsKey('DscResourceInfo'))
             {
                 $Script:DscResourceCache = Get-DscResource
+            }
+            elseif ($PSBoundParameters.ContainsKey('DscResourceInfo'))
+            {
+                $Script:DscResourceCache = $DscResourceInfo
             }
         }
 
