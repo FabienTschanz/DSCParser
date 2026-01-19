@@ -7,13 +7,20 @@ $Script:ModuleRoot = $PSScriptRoot
 
 # Check if running in PowerShell Core or Windows PowerShell
 $Script:IsPowerShellCore = $PSVersionTable.PSEdition -eq 'Core'
-$Script:AssemblyPath = Join-Path $Script:ModuleRoot "bin\netstandard2.0\DSCParser.CSharp.dll"
+$Script:AssemblyPath = Join-Path $Script:ModuleRoot "bin\DSCParser.CSharp.dll"
+$Script:AssemblyLoaded = $false
 
 # Function to load the C# assembly using Assembly Load Context
 function Initialize-DscParserAssembly
 {
     [CmdletBinding()]
     param()
+
+    if ($Script:AssemblyLoaded)
+    {
+        Write-Verbose "DSCParser.CSharp assembly is already initialized."
+        return $true
+    }
 
     try
     {
@@ -25,7 +32,7 @@ function Initialize-DscParserAssembly
 
         Add-Type -Path $Script:AssemblyPath -ErrorAction Stop
 
-        Write-Verbose "Successfully loaded DSCParser.CSharp assembly (PowerShell $($PSVersionTable.PSEdition))"
+        Write-Verbose -Message "Successfully loaded DSCParser.CSharp assembly (PowerShell $($PSVersionTable.PSEdition))"
         return $true
     }
     catch
@@ -37,11 +44,6 @@ function Initialize-DscParserAssembly
 
 # Initialize the assembly on module import
 $Script:AssemblyLoaded = Initialize-DscParserAssembly
-
-if ($Script:IsPowerShellCore)
-{
-    Import-Module -Name 'PSDesiredStateConfiguration' -MinimumVersion 2.0.7 -Prefix 'Pwsh' -ErrorAction SilentlyContinue
-}
 
 <#
 .SYNOPSIS
@@ -128,29 +130,13 @@ function ConvertTo-DSCObject
 
     try
     {
-        # Initialize DSC resource cache
-        if ($Script:IsPowerShellCore)
+        if ($null -eq $Script:DscResourceCache -and -not $PSBoundParameters.ContainsKey('DscResourceInfo'))
         {
-            # PowerShell 7+ uses PSDesiredStateConfiguration module
-            if ($null -eq $Script:DscResourceCache -and -not $PSBoundParameters.ContainsKey('DscResourceInfo'))
-            {
-                $Script:DscResourceCache = Get-PwshDscResource
-            }
-            elseif ($PSBoundParameters.ContainsKey('DscResourceInfo'))
-            {
-                $Script:DscResourceCache = $DscResourceInfo
-            }
+            $Script:DscResourceCache = Get-DscResourceV2
         }
-        else
+        elseif ($PSBoundParameters.ContainsKey('DscResourceInfo'))
         {
-            if ($null -eq $Script:DscResourceCache -and -not $PSBoundParameters.ContainsKey('DscResourceInfo'))
-            {
-                $Script:DscResourceCache = Get-DscResource
-            }
-            elseif ($PSBoundParameters.ContainsKey('DscResourceInfo'))
-            {
-                $Script:DscResourceCache = $DscResourceInfo
-            }
+            $Script:DscResourceCache = $DscResourceInfo
         }
 
         $options = [DSCParser.CSharp.DscParseOptions]::new()
@@ -242,9 +228,3 @@ function ConvertFrom-DSCObject
         }
     }
 }
-
-# Export module members
-Export-ModuleMember -Function @(
-    'ConvertTo-DSCObject',
-    'ConvertFrom-DSCObject'
-)

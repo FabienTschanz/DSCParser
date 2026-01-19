@@ -13,5 +13,8 @@
     <PackageReference Include="Microsoft.Management.Infrastructure" Version="3.0.0" />
     <PackageReference Include="PowerShellStandard.Library" Version="5.1.1" PrivateAssets="All" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DSCParser.Shared\DSCParser.Shared.csproj" />
+  </ItemGroup>
 
 </Project>

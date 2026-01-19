@@ -121,12 +121,17 @@ namespace Microsoft.PowerShell.DesiredStateConfiguration
         public List<object> Properties { get; private set; }
 
         /// <summary>
+        /// Gets or sets implementation detail (e.g., "ScriptBased", "ClassBased")
+        /// </summary>
+        public string? ImplementationDetail { get; set; }
+
+        /// <summary>
         /// Updates properties of the resource. Same as public variant, but accepts list of DscResourcePropertyInfo.
         /// Backwards compatibility for Windows PowerShell. It uses the DSCResourcePropertyInfo type from
         /// the Microsoft.Windows.DSC.CoreConfProviders.dll, which is incompatible with our own type.
         /// </summary>
         /// <param name="properties">Updated properties</param>
-        internal void UpdateProperties(List<DscResourcePropertyInfo> properties)
+        public void UpdateProperties(List<DscResourcePropertyInfo> properties)
         {
             Properties = properties.ConvertAll(prop => (object)prop);
         }
@@ -172,6 +177,6 @@ namespace Microsoft.PowerShell.DesiredStateConfiguration
         /// <summary>
         /// Gets Values for a resource property
         /// </summary>
-        public List<string> Values { get; internal set; }
+        public List<string> Values { get; set; }
     }
 }

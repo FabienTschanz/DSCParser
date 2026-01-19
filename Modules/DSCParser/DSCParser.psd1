@@ -63,7 +63,7 @@
     # FormatsToProcess = @()
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-    # NestedModules = @('Modules/DSCParser.psm1')
+    NestedModules = @('bin\DSCParser.PSDSC.psd1')
 
     # Functions to export from this module
     FunctionsToExport = @(
@@ -72,7 +72,7 @@
     )
 
     # Cmdlets to export from this module
-    CmdletsToExport = @()
+    CmdletsToExport = @('Get-DscResourceV2')
 
     # Variables to export from this module
     #VariablesToExport = '*'
