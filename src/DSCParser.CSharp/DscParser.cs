@@ -247,7 +247,6 @@ namespace DSCParser.CSharp
         private static List<DscResourceInstance> GetResourceInstances(ConfigurationDefinitionAst configAst, DscParseOptions? options = null)
         {
             // Try to find Node statement first
-
             DynamicKeywordStatementAst? dynamicNodeStatement = configAst.Body.ScriptBlock.EndBlock.Statements
                 .Where(ast => ast is DynamicKeywordStatementAst dynAst &&
                         dynAst.CommandElements[0] is StringConstantExpressionAst constant &&
@@ -274,7 +273,7 @@ namespace DSCParser.CSharp
                 // 1 - Resource Instance Name
                 // 2 - Key/Pair Value list of parameters.
                 string resourceType = resource.CommandElements[0].ToString();
-                string resourceInstanceName = resource.CommandElements[1].ToString();
+                string resourceInstanceName = ((StringConstantExpressionAst)resource.CommandElements[1]).Value;
 
                 currentResourceInfo.ResourceName = resourceType;
                 currentResourceInfo.ResourceInstanceName = resourceInstanceName;
@@ -308,7 +307,6 @@ namespace DSCParser.CSharp
                     //    UserName = $ConfigurationData.NonNodeData.AdminUserName
                     //    Password = $ConfigurationData.NonNodeData.AdminPassword
                     // };
-
                     if (keyValuePair.Item2 is PipelineAst pip)
                     {
                         value = ProcessPipelineAst(pip, resourceType, options?.IncludeCIMInstanceInfo ?? true);
@@ -444,7 +442,9 @@ namespace DSCParser.CSharp
                 MemberExpressionAst member => ProcessMemberExpressionAst(member),
                 // An array like @("value1", "value2")
                 ArrayExpressionAst array => ProcessArrayExpressionAst(array, resourceName, includeCimInstanceInfo),
-                _ => (expr.Expression.ToString())
+                // An expandable string like "https://$OrganizationName/"
+                ExpandableStringExpressionAst expString => expString.Value,
+                _ => expr.Expression.ToString()
             };
         }
 
@@ -601,10 +601,42 @@ namespace DSCParser.CSharp
             // Process comments after Node
             for (int i = tokenPositionOfNode; i < tokens.Length; i++)
             {
-                if (tokens[i].Kind == TokenKind.Comment)
+                if (tokens[i].Kind is TokenKind.Comment)
                 {
-                    // Find associated resource and property
-                    // Implementation would mirror PowerShell version
+                    int stepback = 1;
+                    while (tokens[i - stepback].Kind is not TokenKind.DynamicKeyword)
+                    {
+                        stepback++;
+                    }
+
+                    string commentResourceType = tokens[i - stepback].Text;
+                    StringExpandableToken resourceInstanceName = tokens[i - stepback + 1] as StringExpandableToken
+                        ?? throw new InvalidOperationException($"Failed to find corresponding resource for comment {tokens[i].Text}");
+                    string commentResourceInstanceName = resourceInstanceName.Value;
+
+                    // Backtrack to find associated property
+                    stepback = 0;
+                    while (tokens[i - stepback].Kind is not TokenKind.Identifier and not TokenKind.NewLine)
+                    {
+                        stepback++;
+                    }
+
+                    if (tokens[i - stepback].Kind is TokenKind.Identifier)
+                    {
+                        string commentAssociatedProperty = tokens[i - stepback].Text;
+
+                        // Loop through all instances in the ParsedObject to retrieve
+                        // the one associated with the comment
+                        for (int j = 0; j < parsedObjects.Count; j++)
+                        {
+                            if (parsedObjects[j].ResourceName.Equals(commentResourceType) &&
+                                parsedObjects[j].ResourceInstanceName.Equals(commentResourceInstanceName) &&
+                                parsedObjects[j].Properties.ContainsKey(commentAssociatedProperty))
+                            {
+                                parsedObjects[j].AddProperty($"_metadata_{commentAssociatedProperty}", tokens[i].Text);
+                            }
+                        }
+                    }
                 }
             }
 
