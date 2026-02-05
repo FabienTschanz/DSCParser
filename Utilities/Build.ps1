@@ -45,12 +45,23 @@ param(
 )
 
 # Verify .NET SDK is available
-try {
-    $dotnetVersion = dotnet --version
-    Write-Host "Using .NET SDK version: $dotnetVersion" -ForegroundColor Green
-} catch {
-    Write-Error "dotnet CLI not found. Please install .NET SDK 6.0 or higher from https://dotnet.microsoft.com/download"
-    exit 1
+
+$command = Get-Command dotnet -ErrorAction SilentlyContinue
+if (-not $command) {
+    throw "dotnet CLI not found. Please install .NET SDK 6.0 or higher from https://dotnet.microsoft.com/download"
+}
+
+$dotnetSdkInfo = dotnet --list-sdks
+$dotnetSdks = @()
+foreach ($sdk in $dotnetSdkInfo) {
+    $version = $sdk.Split(' ')[0]
+    if ([version]$version -ge [version]'6.0.0') {
+        $dotnetSdks += $version
+    }
+}
+
+if ($dotnetSdks.Count -eq 0) {
+    throw "No .NET SDK 6.0 or higher found. Please install .NET SDK 6.0 or higher from https://dotnet.microsoft.com/download"
 }
 
 function Build-Project {
@@ -79,8 +90,7 @@ function Build-Project {
 
     # Verify project file exists
     if (-not (Test-Path -Path $projectPath)) {
-        Write-Error "Project file not found at: $projectPath"
-        exit 1
+        throw "Project file not found at: $projectPath"
     }
 
     # Clean if requested
@@ -100,18 +110,15 @@ function Build-Project {
     $buildResult = dotnet build $projectPath -c $Configuration --nologo 2>&1
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Build failed with exit code $LASTEXITCODE"
-        Write-Error ($buildResult | Out-String)
-        exit $LASTEXITCODE
+        throw "Build failed with exit code $LASTEXITCODE. Build result: $($buildResult | Out-String)"
     }
 
     Write-Host "Build succeeded!" -ForegroundColor Green
 
     # Verify output DLL exists
-    $dllPath = Join-Path -Path $outputDir -ChildPath "$projectName.dll"
+    $dllPath = Join-Path -Path $outputDir -ChildPath "$ProjectName.dll"
     if (-not (Test-Path -Path $dllPath)) {
-        Write-Error "Build succeeded but DLL not found at expected location: $dllPath"
-        exit 1
+        throw "Build succeeded but DLL not found at expected location: $dllPath"
     }
 
     # Create target directory if it doesn't exist
@@ -126,10 +133,10 @@ function Build-Project {
     Write-Host "Copying assemblies to module dependencies..." -ForegroundColor Yellow
 
     $filesToCopy = @(
-        "$projectName.dll"
-        "$projectName.pdb"  # Include PDB for debugging
-        "$projectName.xml"  # Include XML documentation
-        "$projectName.psd1" # Include module manifest if exists
+        "$ProjectName.dll"
+        "$ProjectName.pdb"  # Include PDB for debugging
+        "$ProjectName.xml"  # Include XML documentation
+        "$ProjectName.psd1" # Include module manifest if exists
     )
 
     foreach ($fileName in $filesToCopy) {
